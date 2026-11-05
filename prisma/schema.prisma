@@ -1,0 +1,184 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Category {
+  FOOD
+  GROCERIES
+  TRAVEL
+  SHOPPING
+  SUBSCRIPTIONS
+  RENT
+  EDUCATION
+  BILLS
+  TRANSFERS
+  OTHER
+}
+
+/// How a transaction got its category. USER beats RULE beats AI beats BUILTIN beats NONE.
+enum CategorySource {
+  USER
+  RULE
+  AI
+  BUILTIN
+  NONE
+}
+
+enum RuleSource {
+  USER
+  AI
+}
+
+enum Direction {
+  DEBIT
+  CREDIT
+}
+
+enum Bank {
+  SBI
+  HDFC
+  ICICI
+  AXIS
+  KOTAK
+  GENERIC
+}
+
+enum UsageEventType {
+  SIGNUP
+  LOGIN
+  IMPORT
+  RECATEGORISE
+  BUDGET_SET
+  EXPORT
+  DELETE_DATA
+  DELETE_ACCOUNT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  isDemo       Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  accounts     BankAccount[]
+  transactions Transaction[]
+  rules        MerchantRule[]
+  budgets      Budget[]
+  imports      Import[]
+  usageEvents  UsageEvent[]
+}
+
+/// One row per bank account a user has imported from. Only the last 4 digits are ever kept.
+model BankAccount {
+  id        String   @id @default(cuid())
+  userId    String
+  bank      Bank
+  /// Last four digits of the account number, or "" when the statement didn't show one.
+  last4     String   @default("")
+  createdAt DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  imports      Import[]
+
+  @@unique([userId, bank, last4])
+}
+
+/// Metadata about an upload. The uploaded file itself is never stored.
+model Import {
+  id            String   @id @default(cuid())
+  userId        String
+  accountId     String?
+  bank          Bank
+  fileType      String
+  rowsParsed    Int
+  inserted      Int
+  duplicates    Int
+  aiCategorised Int
+  createdAt     DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account      BankAccount?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+
+  @@index([userId, createdAt])
+}
+
+model Transaction {
+  id             String         @id @default(cuid())
+  userId         String
+  accountId      String?
+  importId       String?
+  /// Calendar date of the transaction (no time component; bank statements don't give one reliably).
+  date           DateTime       @db.Date
+  description    String
+  /// Always positive; `direction` says which way the money moved. Integer paise, never floats.
+  amountPaise    Int
+  direction      Direction
+  balancePaise   Int?
+  merchant       String
+  /// Lower-case normalised merchant id used to match rules ("swiggy", "rahul@okaxis").
+  merchantKey    String
+  vpa            String?
+  category       Category       @default(OTHER)
+  categorySource CategorySource @default(NONE)
+  /// Hash of date + direction + amount + reference/description + same-day occurrence.
+  /// Unique per user so overlapping uploads can't insert the same transaction twice.
+  fingerprint    String
+  createdAt      DateTime       @default(now())
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account BankAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  import  Import?      @relation(fields: [importId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, fingerprint])
+  @@index([userId, date])
+  @@index([userId, merchantKey])
+  @@index([userId, category, date])
+}
+
+/// "Always categorise <merchant> as X". USER rules come from corrections; AI rules cache Gemini answers.
+model MerchantRule {
+  id          String     @id @default(cuid())
+  userId      String
+  merchantKey String
+  category    Category
+  source      RuleSource
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, merchantKey])
+}
+
+model Budget {
+  id         String   @id @default(cuid())
+  userId     String
+  category   Category
+  limitPaise Int
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+}
+
+/// Privacy-respecting counters: an event type, a timestamp and (until the account is deleted) the user id.
+model UsageEvent {
+  id        String         @id @default(cuid())
+  type      UsageEventType
+  userId    String?
+  createdAt DateTime       @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+}
