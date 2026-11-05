@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import NextAuth from "next-auth";
+import NextAuth, { AuthError } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { loginSchema } from "@/lib/validation/schemas";
 import { db } from "./db";
@@ -17,7 +17,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   logger: {
     // A stale cookie or a wrong password is normal traffic, not a server error.
     error(error) {
-      if (!EXPECTED_AUTH_ERRORS.has(error.name)) console.error(error);
+      const kind = error instanceof AuthError ? error.type : error.name;
+      if (!EXPECTED_AUTH_ERRORS.has(kind)) console.error(error);
     },
   },
   providers: [
