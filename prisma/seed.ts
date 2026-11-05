@@ -105,6 +105,8 @@ async function main() {
   await db.transaction.deleteMany({ where: { userId: user.id } });
   await db.import.deleteMany({ where: { userId: user.id } });
   await db.budget.deleteMany({ where: { userId: user.id } });
+  await db.bankAccount.deleteMany({ where: { userId: user.id } });
+  await db.merchantRule.deleteMany({ where: { userId: user.id } });
 
   const rows = enrichRows(buildDemoStatement(todayIST()), "SBI");
   const { assignments } = await categorise(

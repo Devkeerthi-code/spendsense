@@ -10,7 +10,6 @@ export function detectFileKind(bytes: Uint8Array): FileKind | null {
   const head = new TextDecoder("latin1").decode(bytes.slice(0, 5));
   if (head.startsWith("%PDF")) return "pdf";
   const sample = new TextDecoder("utf-8", { fatal: false }).decode(bytes.slice(0, 4096));
-  // eslint-disable-next-line no-control-regex
   const binary = /[\u0000-\u0008\u000E-\u001F]/.test(sample);
   return !binary && /[,;\t]/.test(sample) ? "csv" : null;
 }

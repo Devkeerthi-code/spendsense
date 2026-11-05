@@ -151,8 +151,8 @@ function findGenericHeaderRow(table: string[][]): number {
 }
 
 const GENERIC_ALIASES: Record<keyof ColumnMapping, RegExp> = {
-  date: /date/,
-  description: /description|narration|particulars|remarks|details|merchant|payee/,
+  date: /date|^when$|^day$/,
+  description: /description|narration|particulars|remarks|details|merchant|payee|^what$|^to$|^note/,
   debit: /debit|withdrawal|^dr$|paidout|moneyout/,
   credit: /credit|deposit|^cr$|paidin|moneyin/,
   amount: /^amount|amountinr$|^amt$/,

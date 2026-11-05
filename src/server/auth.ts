@@ -8,10 +8,18 @@ import { track } from "./usage";
 // Compared against when the email doesn't exist, so response time doesn't reveal which emails are registered.
 const DUMMY_HASH = "$2b$10$5rdFVdxsz9XUBlmJrJhIx.sBHG4/aUfOw.o3t1BwPNP9xhRN2Ianq";
 
+const EXPECTED_AUTH_ERRORS = new Set(["JWTSessionError", "CredentialsSignin"]);
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 * 30 },
   pages: { signIn: "/login" },
   trustHost: true,
+  logger: {
+    // A stale cookie or a wrong password is normal traffic, not a server error.
+    error(error) {
+      if (!EXPECTED_AUTH_ERRORS.has(error.name)) console.error(error);
+    },
+  },
   providers: [
     Credentials({
       credentials: { email: {}, password: {} },

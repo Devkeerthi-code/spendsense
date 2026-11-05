@@ -28,7 +28,10 @@ export interface MonthSummary {
   /** Days of the month that have happened (all of them for a past month, 0 for a future one). */
   daysElapsed: number;
   dailyAveragePaise: number;
-  /** Month-end spend at the current pace. Equals the actual spend once the month is over. */
+  /**
+   * Month-end spend: monthly bills counted once, everything else at the current daily pace.
+   * Equals the actual spend once the month is over.
+   */
   projectedPaise: number;
   isCurrentMonth: boolean;
   byCategory: CategorySpend[];
@@ -51,12 +54,20 @@ export function elapsedDays(month: string, today: string): number {
   return Number(today.slice(8, 10));
 }
 
+/**
+ * Paid once a month (rent, subscriptions, recharges, fees). Projecting them at a daily pace would turn
+ * hostel rent paid on the 1st into thirty rents, so they are counted once and only the rest is extrapolated.
+ */
+const FIXED_CATEGORIES = new Set<CategoryId>(["RENT", "SUBSCRIPTIONS", "BILLS", "EDUCATION"]);
+
 export function summariseMonth(month: string, current: InsightTxn[], previous: InsightTxn[], today: string): MonthSummary {
   const { year, month: m } = parseMonthKey(month)!;
   const total = daysInMonth(year, m);
   const daysElapsed = elapsedDays(month, today);
+  const isCurrentMonth = month === today.slice(0, 7);
   const debits = current.filter((t) => t.direction === "DEBIT");
-  const previousDebits = previous.filter((t) => t.direction === "DEBIT");
+  // Mid-month, compare like with like: the 1st-5th of this month against the 1st-5th of last month.
+  const previousDebits = previous.filter((t) => t.direction === "DEBIT" && (!isCurrentMonth || Number(t.date.slice(8, 10)) <= daysElapsed));
   const spentPaise = sum(debits);
   const daily = new Array<number>(total).fill(0);
   for (const t of debits) {
@@ -65,6 +76,8 @@ export function summariseMonth(month: string, current: InsightTxn[], previous: I
   }
 
   const monthOver = daysElapsed >= total || daysElapsed === 0;
+  const fixedPaise = sum(debits.filter((t) => FIXED_CATEGORIES.has(t.category)));
+  const variablePace = ((spentPaise - fixedPaise) / Math.max(daysElapsed, 1)) * total;
   return {
     month,
     spentPaise,
@@ -74,8 +87,8 @@ export function summariseMonth(month: string, current: InsightTxn[], previous: I
     daysInMonth: total,
     daysElapsed,
     dailyAveragePaise: daysElapsed ? Math.round(spentPaise / daysElapsed) : 0,
-    projectedPaise: monthOver ? spentPaise : Math.round((spentPaise / daysElapsed) * total),
-    isCurrentMonth: month === today.slice(0, 7),
+    projectedPaise: monthOver ? spentPaise : fixedPaise + Math.round(variablePace),
+    isCurrentMonth,
     byCategory: byCategory(debits, previousDebits),
     topMerchants: topMerchants(debits, 5),
     daily,

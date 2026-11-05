@@ -58,7 +58,14 @@ export async function accountOverview(userId: string) {
     db.transaction.count({ where: { userId } }),
     db.import.count({ where: { userId } }),
   ]);
-  return { accounts, rules, txnCount, imports };
+  const names = await db.transaction.findMany({
+    where: { userId, merchantKey: { in: rules.map((r) => r.merchantKey) } },
+    distinct: ["merchantKey"],
+    select: { merchantKey: true, merchant: true },
+  });
+  const nameOf = new Map(names.map((n) => [n.merchantKey, n.merchant]));
+  const rulesWithNames = rules.map((r) => ({ ...r, merchant: nameOf.get(r.merchantKey) ?? r.merchantKey }));
+  return { accounts, rules: rulesWithNames, txnCount, imports };
 }
 
 export async function deleteRule(userId: string, id: string): Promise<boolean> {

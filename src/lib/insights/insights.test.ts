@@ -59,7 +59,7 @@ describe("small leaks", () => {
 
 describe("month summary", () => {
   const current = [debit("2026-11-01", 500, "swiggy", "FOOD"), debit("2026-11-02", 250, "uber", "TRAVEL"), debit("2026-11-02", 250, "swiggy", "FOOD")];
-  const previous = [debit("2026-10-10", 500, "swiggy", "FOOD")];
+  const previous = [debit("2026-10-02", 500, "swiggy", "FOOD")];
 
   it("projects month-end spend from the pace so far", () => {
     const s = summariseMonth("2026-11", current, previous, "2026-11-05");
@@ -68,6 +68,19 @@ describe("month summary", () => {
     expect(s.dailyAveragePaise).toBe(20000);
     expect(s.projectedPaise).toBe(600000);
     expect(s.daily.slice(0, 3)).toEqual([50000, 50000, 0]);
+  });
+
+  it("counts rent once instead of projecting it at a daily pace", () => {
+    const withRent = [...current, debit("2026-11-01", 6500, "sunrise pg", "RENT")];
+    const s = summariseMonth("2026-11", withRent, [], "2026-11-05");
+    expect(s.projectedPaise).toBe(650000 + 600000);
+  });
+
+  it("compares the current month with the same days of last month", () => {
+    const lastMonth = [debit("2026-10-03", 300, "swiggy", "FOOD"), debit("2026-10-20", 900, "swiggy", "FOOD")];
+    const s = summariseMonth("2026-11", current, lastMonth, "2026-11-05");
+    expect(s.previousSpentPaise).toBe(30000);
+    expect(s.byCategory[0]).toMatchObject({ category: "FOOD", previousPaise: 30000, changePct: 150 });
   });
 
   it("uses the actual total for a finished month", () => {
