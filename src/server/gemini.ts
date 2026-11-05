@@ -1,4 +1,4 @@
-import { ApiError, GoogleGenAI } from "@google/genai";
+import { ApiError, GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { chunk, normaliseAiCategories } from "@/lib/ai-categories";
 import { CATEGORIES, CATEGORY_LABEL, type CategoryId } from "@/lib/categories";
 import type { Classifier, UnknownMerchant } from "@/lib/categorise";
@@ -6,7 +6,9 @@ import type { Classifier, UnknownMerchant } from "@/lib/categorise";
 const BATCH_SIZE = 40;
 const PARALLEL_BATCHES = 3;
 const TOTAL_BUDGET_MS = 25_000;
-const FALLBACK_MODELS = ["gemini-flash-lite-latest"];
+// One slow model must not eat the whole budget; the fallback gets its turn.
+const ATTEMPT_MS = 12_000;
+const FALLBACK_MODELS = ["gemini-flash-latest"];
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 
 const PROMPT = `You categorise payees from an Indian college student's bank statement (mostly UPI payments).
@@ -40,7 +42,7 @@ export function aiAvailable(): boolean {
 }
 
 function modelsToTry(): string[] {
-  const primary = process.env.GEMINI_MODEL || "gemini-flash-latest";
+  const primary = process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
   return [primary, ...FALLBACK_MODELS.filter((m) => m !== primary)];
 }
 
@@ -60,7 +62,14 @@ async function classifyBatch(ai: GoogleGenAI, batch: UnknownMerchant[], deadline
       const res = await ai.models.generateContent({
         model,
         contents: [{ role: "user", parts: [{ text: `${PROMPT}\n\nPayees:\n${JSON.stringify(payload)}` }] }],
-        config: { responseMimeType: "application/json", responseJsonSchema, temperature: 0, abortSignal: AbortSignal.timeout(remaining) },
+        config: {
+          responseMimeType: "application/json",
+          responseJsonSchema,
+          temperature: 0,
+          // Labelling a payee needs no reasoning; thinking only adds latency.
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          abortSignal: AbortSignal.timeout(Math.min(remaining, ATTEMPT_MS)),
+        },
       });
       return normaliseAiCategories(JSON.parse(res.text ?? "null"), batch);
     } catch (err) {
