@@ -1,0 +1,6 @@
+FAKE TEST DATA - not a real statement
+Account Number,XXXXXXXX7788
+S No.,Value Date,Transaction Date,Cheque Number,Transaction Remarks,Withdrawal Amount (INR ),Deposit Amount (INR ),Balance (INR )
+1,01/10/2026,01/10/2026,-,UPI/412300000021/Payment from Ph/uber.india@icici/ICICI BANK LIMITED,180.00,0.00,"6,820.00"
+2,03/10/2026,03/10/2026,-,UPI/412300000022/dinner/ananya.r@okicici/ICICI Bank,450.00,0.00,"6,370.00"
+3,05/10/2026,05/10/2026,-,NEFT-DEMOCOLLEGE-SCHOLARSHIP OCT,0.00,"2,000.00","8,370.00"
